@@ -48,7 +48,7 @@ class Users
         $this->name = $user->name;
         $this->lastName = $user->lastName;
         $this->email = $user->email;
-        $this->createdAt = new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo'));
+        // $this->createdAt = new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo'));
         $this->updatedAt = new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo'));
     }
 

@@ -7,6 +7,7 @@ use App\Repository\UsersRepository;
 use App\Service\AwsUploader;
 use App\Service\ValidatorFile;
 use Doctrine\ORM\EntityManagerInterface;
+use PhpParser\Node\Expr\Cast\Object_;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,11 +17,25 @@ use Symfony\Component\Routing\Annotation\Route;
 class UserController extends AbstractController{
 
     #[Route('/user/create', name: 'user_create', methods: ['POST'])]
-    public function create(Request $request, EntityManagerInterface $em, UsersRepository $userRepository): JsonResponse {
+    public function create(Request $request, EntityManagerInterface $em, UsersRepository $userRepository, ValidatorFile $validatorFile, AwsUploader $awsUploader): JsonResponse {
         try {
-            $jsonData = json_decode($request->getContent());
+            $jsonData = $request->request->all();
+            $files = $request->files->all();
+            $data = (object) $jsonData;
+            $files = (object) $files;
 
-            $userExists = $userRepository->findByEmail($jsonData->email);
+            $userExists = $userRepository->findByEmail($data->email);
+
+            if($files->photo) {
+                $imgValid = $validatorFile->validImage($files->photo);
+
+                if(isset($imgValid['invalid'])) {
+                    $response = $imgValid['invalid'];
+                    return $this->json([
+                        'alert' => $response
+                    ]);
+                }
+            }
 
             if($userExists) {
                 $return['alert'] = 'Este e-mail já está em uso';
@@ -29,11 +44,11 @@ class UserController extends AbstractController{
                 );
             }
 
-            $user = new Users($jsonData);
+            $user = new Users($data);
             $user->setActive('Y');
             $user->setUserType('common');
             
-            $hashedPassword = password_hash($jsonData->password, PASSWORD_DEFAULT);
+            $hashedPassword = password_hash($data->password, PASSWORD_DEFAULT);
             $user->setPassword($hashedPassword);
             $user->setToken($this->newCrypto());
             $user->setCreatedAt(new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo')));
@@ -43,9 +58,18 @@ class UserController extends AbstractController{
             $em->flush();
             $userId = $user->getId();
 
+            if($files->photo) {
+                $fileType = $files->photo->getClientMimeType();
+                $mime = explode('/' , $fileType);
+                $fileName = $userId .'_'. $user->getName() .'.'. $mime[1];
+                $user->setPhotoUrl($_ENV['URLDOCS']. '/' . $_ENV['FOLDERIMGUSERS']. '/' .$fileName);
+                $em->flush();
+                $awsUploader->uploadPhotoUser($files->photo, $userId.'_'.$user->getName());
+            }
+
             return $this->json([
-                'userId' => $userId
-            ]);
+                'success' => 'Usuário criado com sucesso.'
+            ], 201);
 
         } catch (\Exception $e) {
             return $this->json(['erro' => $e->getMessage()], 500);
