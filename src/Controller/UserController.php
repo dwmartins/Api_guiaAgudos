@@ -76,6 +76,30 @@ class UserController extends AbstractController{
         }
     }
 
+    #[Route('/user/login', name: 'login', methods: ['POST'])]
+    public function login(Request $request, UsersRepository $userRepository) {
+        try {
+            $jsonData = $request->request->all();
+            $data = (object) $jsonData;
+
+            $user = $userRepository->findByEmail($data->email);
+
+            if($user) {
+                if(!password_verify($data->password, $user[0]->getPassword())) {
+                    return $this->json([
+                        'alert' => 'Usuário ou senha inválidos.'
+                    ], 200);
+                }
+            }
+
+            return $this->json([
+                'alert' => 'Usuário ou senha inválidos.'
+            ], 200);
+        } catch (\Exception $e) {
+            return $this->json(['erro' => $e->getMessage()], 500);
+        }
+    }
+
     #[Route('/user/teste', methods: ['POST'])]
     public function teste(Request $request, AwsUploader $awsUploader, ValidatorFile $validatorFile) {
         try {
